@@ -4,6 +4,141 @@
 
 #include "i286.h"
 
+static const char *opcode_string[] = {
+    "(bad)",
+    "aaa",
+    "aad",
+    "aam",
+    "aas",
+    "adc",
+    "add",
+    "and",
+    "arpl",
+    "bound",
+    "call",
+    "cbw",
+    "clc",
+    "cld",
+    "cli",
+    "clts",
+    "cmc",
+    "cmp",
+    "cmpsb",
+    "cmpsw",
+    "cwd",
+    "daa",
+    "das",
+    "dec",
+    "div",
+    "enter",
+    "hlt",
+    "idiv",
+    "imul",
+    "in",
+    "inc",
+    "insb",
+    "insw",
+    "int",
+    "into",
+    "iret",
+    "jo",
+    "jno",
+    "jb",
+    "jnb",
+    "je",
+    "jne",
+    "jna",
+    "ja",
+    "js",
+    "jns",
+    "jp",
+    "jnp",
+    "jl",
+    "jle",
+    "jge",
+    "jg",
+    "jcxz",
+    "jmp",
+    "lahf",
+    "lar",
+    "lds",
+    "les",
+    "lea",
+    "leave",
+    "lgdt",
+    "lidt",
+    "lldt",
+    "lmsw",
+    "lodsb",
+    "lodsw",
+    "loop",
+    "loopz",
+    "loopnz",
+    "lsl",
+    "ltr",
+    "mov",
+    "movsb",
+    "movsw",
+    "mul",
+    "neg",
+    "nop",
+    "not",
+    "or",
+    "out",
+    "outsb",
+    "outsw",
+    "pop",
+    "popf",
+    "push",
+    "pusha",
+    "pushf",
+    "rcl",
+    "rcr",
+    "ret",
+    "rol",
+    "ror",
+    "sahf",
+    "salc",
+    "sal",
+    "sar",
+    "sbb",
+    "scasb",
+    "scasw",
+    "shl",
+    "shr",
+    "sgdt",
+    "sidt",
+    "sldt",
+    "smsw",
+    "stc",
+    "std",
+    "sti",
+    "stosb",
+    "stosw",
+    "str",
+    "sub",
+    "test",
+    "verr",
+    "verw",
+    "wait",
+    "xchg",
+    "xlat",
+    "xor",
+    "lock",
+    "rep",
+    "repne",
+    "cs",
+    "ds",
+    "es",
+    "ss",
+};
+
+const char *opcode_mnemonic(enum opcode op)
+{
+    assert(op <= I286_PRE_SS);
+    return opcode_string[op];
+}
+
 bool insn_is_bad(struct insn *ins)
 {
     return ins->op == I286_BAD;
@@ -117,25 +252,68 @@ bool insn_get_branch(struct insn *ins, int16_t *disp)
     return false;
 }
 
-struct insn *insn_alloc(uint32_t ip)
+struct insn *insn_alloc(uint32_t addr)
 {
     struct insn *ins = calloc(1, sizeof(struct insn));
-    ins->addr = ip;
+    ins->addr = addr;
     return ins;
+}
+
+struct oper *oper_alloc(enum oper_flag flags)
+{
+    struct oper *oper = malloc(sizeof(struct oper));
+    oper->flags = flags;
+    oper->next = NULL;
+    return oper;
+}
+
+struct oper *oper_alloc_imm8(uint8_t imm8)
+{
+    struct oper *oper = oper_alloc(I286_OPER_IMM8);
+    oper->imm8 = imm8;
+    return oper;
+}
+
+struct oper *oper_alloc_imm16(uint16_t imm16)
+{
+    struct oper *oper = oper_alloc(I286_OPER_IMM16);
+    oper->imm16 = imm16;
+    return oper;
+}
+
+struct oper *oper_alloc_imm32(uint16_t imm32)
+{
+    struct oper *oper = oper_alloc(I286_OPER_IMM32);
+    oper->imm32 = imm32;
+    return oper;
+}
+
+struct oper *oper_alloc_reg(uint16_t reg)
+{
+    struct oper *oper = oper_alloc(I286_OPER_REG);
+    oper->reg = reg;
+    return oper;
+}
+
+struct oper *oper_alloc_seg(uint16_t seg)
+{
+    struct oper *oper = oper_alloc(I286_OPER_SEG);
+    oper->seg = seg;
+    return oper;
 }
 
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base)
 {
     memset(dis, 0, sizeof(struct dis));
     dis->base = base;
+    dis->limit = len + base;
     dis->bytes = bytes;
-    dis->len = len;
-    dis->decoded = malloc(len * sizeof(struct insn *));
+    dis->decoded = calloc(len, sizeof(struct insn *));
 }
 
 void dis_push_entry(struct dis *dis, uint32_t entry)
 {
-    if (dis->entry_n == DIS_ENTRY_N)
+    if (dis->entry_n >= DIS_ENTRY_N)
         return;
 
     dis->entry_list[dis->entry_n++] = entry;
@@ -150,27 +328,93 @@ bool dis_pop_entry(struct dis *dis, uint32_t *entry)
     return true;
 }
 
+static bool try_fetch8(struct dis *dis, uint8_t *v)
+{
+    if (dis->ip >= dis->limit)
+        return false;
+
+    *v = dis->bytes[dis->ip++ - dis->base];
+    return true;
+}
+
+static bool try_fetch16(struct dis *dis, uint16_t *v)
+{
+    if (dis->ip + 1 >= dis->limit)
+        return false;
+
+    *v = (uint16_t)dis->bytes[dis->ip++ - dis->base]
+       | ((uint16_t)dis->bytes[dis->ip++ - dis->base] << 8);
+    return true;
+}
+
+static bool try_fetch32(struct dis *dis, uint32_t *v)
+{
+    if (dis->ip + 3 >= dis->limit)
+        return false;
+
+    *v = (uint32_t)dis->bytes[dis->ip++ - dis->base]
+       | ((uint32_t)dis->bytes[dis->ip++ - dis->base] << 8)
+       | ((uint32_t)dis->bytes[dis->ip++ - dis->base] << 16)
+       | ((uint32_t)dis->bytes[dis->ip++ - dis->base] << 24);
+    return true;
+}
+
 struct insn *dis_decode(struct dis *dis)
 {
     uint32_t start = dis->ip;
+    uint8_t op = dis->bytes[dis->ip++ - dis->base];
 
     struct insn *ins = insn_alloc(start);
     ins->op = I286_BAD;
-    ins->len = 1;
 
-    dis->ip++;
+    switch (op) {
+        case 0xF8:
+            ins->op = I286_CLC;
+            break;
+
+        case 0xFA:
+            ins->op = I286_CLI;
+            break;
+
+        case 0xFC:
+            ins->op = I286_CLD;
+            break;
+
+        case 0xE9:
+            ins->op = I286_JMP;
+            ins->opers = oper_alloc(I286_OPER_IMM16);
+            if (!try_fetch16(dis, &ins->opers->imm16))
+                ins->op = I286_BAD;
+            break;
+
+        case 0xEA:
+            ins->op = I286_JMP;
+            ins->opers = oper_alloc(I286_OPER_IMM32);
+            if (!try_fetch32(dis, &ins->opers->imm32))
+                ins->op = I286_BAD;
+            break;
+
+        case 0xEB:
+            ins->op = I286_JMP;
+            ins->opers = oper_alloc(I286_OPER_IMM8);
+            if (!try_fetch8(dis, &ins->opers->imm8))
+                ins->op = I286_BAD;
+            break;
+    }
+
+    if (ins->op == I286_BAD)
+        dis->ip = start + 1;
 
     dis->decoded[start - dis->base] = ins;
+    ins->len = dis->ip - start;
     return ins;
 }
 
 void dis_disasm(struct dis *dis)
 {
-    uint32_t limit = dis->base + dis->len;
-
     while (dis_pop_entry(dis, &dis->ip)) {
         // Linear Sweep
-        while (dis->ip < limit) {
+        while (dis->ip < dis->limit) {
             struct insn *ins = dis_decode(dis);
 
             if (insn_is_bad(ins))
@@ -179,7 +423,6 @@ void dis_disasm(struct dis *dis)
             int16_t branch;
             if (insn_get_branch(ins, &branch))
                 dis_push_entry(dis, dis->ip + branch);
-
 
             if (insn_is_terminator(ins))
                 break;
@@ -204,7 +447,7 @@ void disasm(uint8_t *bytes, size_t len)
             continue;
         }
 
-        printf("%d\n", ins->op);
+        printf("%x: %s\n", ins->addr, opcode_mnemonic(ins->op));
 
         i += ins->len;
     }

@@ -59,6 +59,7 @@ struct oper {
 		uint16_t imm16;
 		uint32_t imm32;
 		enum reg reg;
+		enum seg seg;
 		struct {
 			enum mem mode;
 			uint16_t disp;
@@ -68,7 +69,7 @@ struct oper {
 };
 
 enum opcode {
-    I286_BAD = -1,
+    I286_BAD,
     I286_AAA,
     I286_AAD,
     I286_AAM,
@@ -206,14 +207,16 @@ struct insn {
 #define DIS_ENTRY_N 32
 
 struct dis {
-    uint32_t base;
-    const uint8_t *bytes;
-    uint32_t len;
     uint32_t ip;
+    uint32_t base;
+    uint32_t limit;
+    const uint8_t *bytes;
     uint32_t entry_list[DIS_ENTRY_N];
     uint32_t entry_n;
     struct insn **decoded;
 };
+
+const char *opcode_mnemonic(enum opcode op);
 
 bool insn_is_bad(struct insn *ins);
 
@@ -225,7 +228,19 @@ bool insn_is_branch(struct insn *ins);
 
 bool insn_get_branch(struct insn *ins, int16_t *disp);
 
-struct insn *insn_alloc(uint32_t ip);
+struct insn *insn_alloc(uint32_t addr);
+
+struct oper *oper_alloc(enum oper_flag flags);
+
+struct oper *oper_alloc_imm8(uint8_t imm8);
+
+struct oper *oper_alloc_imm16(uint16_t imm16);
+
+struct oper *oper_alloc_imm32(uint16_t imm32);
+
+struct oper *oper_alloc_reg(uint16_t reg);
+
+struct oper *oper_alloc_seg(uint16_t reg);
 
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base);
 
