@@ -280,22 +280,22 @@ bool insn_get_branch(struct insn *ins, int32_t *target)
         case I286_JG:
         case I286_JCXZ:
             if (ins->opers->flags == I286_OPER_IMM16) {
-                *target = ins->addr + ins->len + (int32_t)ins->opers->imm16;
+                *target = ins->addr + ins->len + (int32_t)(int16_t)ins->opers->imm16;
                 return true;
             }
 
             assert(ins->opers->flags == I286_OPER_IMM8);
-            *target = ins->addr + ins->len + (int32_t)ins->opers->imm8;
+            *target = ins->addr + ins->len + (int32_t)(int8_t)ins->opers->imm8;
             return true;
 
         case I286_JMP:
             if (ins->opers->flags == I286_OPER_IMM16) {
-                *target = ins->addr + ins->len + (int32_t)ins->opers->imm16;
+                *target = ins->addr + ins->len + (int32_t)(int16_t)ins->opers->imm16;
                 return true;
             }
 
             if (ins->opers->flags == I286_OPER_IMM8) {
-                *target = ins->addr + ins->len + (int32_t)ins->opers->imm8;
+                *target = ins->addr + ins->len + (int32_t)(int8_t)ins->opers->imm8;
                 return true;
             }
 
@@ -307,12 +307,12 @@ bool insn_get_branch(struct insn *ins, int32_t *target)
         case I286_LOOPZ:
         case I286_LOOPNZ:
             assert(ins->opers->flags == I286_OPER_IMM8);
-            *target = ins->addr + ins->len + (int32_t)ins->opers->imm8;
+            *target = ins->addr + ins->len + (int32_t)(int8_t)ins->opers->imm8;
             return true;
 
         case I286_CALL:
             if (ins->opers->flags == I286_OPER_IMM16) {
-                *target = ins->addr + ins->len + (int32_t)ins->opers->imm16;
+                *target = ins->addr + ins->len + (int32_t)(int16_t)ins->opers->imm16;
                 return true;
             }
             break;
@@ -608,12 +608,7 @@ static bool try_modrm_full(struct dis *dis, struct oper **opers, bool dir, bool 
 struct insn *dis_decode(struct dis *dis)
 {
     uint32_t start = dis->ip;
-
-    struct insn *ins = dis->decoded[start - dis->base];
-    if (ins != NULL)
-        return ins;
-
-    ins = insn_alloc(start);
+    struct insn *ins = insn_alloc(start);
     ins->op = I286_BAD;
 
     uint8_t op = dis->bytes[dis->ip++ - dis->base];
@@ -1016,10 +1011,12 @@ struct insn *dis_decode(struct dis *dis)
 void dis_disasm(struct dis *dis)
 {
     while (dis_pop_entry(dis, &dis->ip)) {
-        // Linear Sweep
         while (dis->ip < dis->limit) {
-            struct insn *ins = dis_decode(dis);
+            if (dis->decoded[dis->ip - dis->base])
+                break;
 
+            // Linear Sweep
+            struct insn *ins = dis_decode(dis);
             if (insn_is_bad(ins))
                 break;
 

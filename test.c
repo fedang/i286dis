@@ -19,7 +19,7 @@ void disasm(uint8_t *bytes, size_t len)
             continue;
 
         insn_snprintf(buf, sizeof(buf), ins);
-        printf("%x: %s\n", ins->addr, buf);
+        printf("%x %x: %s\n", idx, ins->addr, buf);
     }
 }
 
@@ -36,9 +36,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	char buf[400];
-	if (fread(buf, sizeof(buf), 1, fp) != 1) {
-		fprintf(stderr, "Could not read the MBR\n");
+	uint8_t buf[400];
+	if (fread(buf, 1, sizeof(buf), fp) == 0) {
+		fprintf(stderr, "Could not read the file\n");
 		fclose(fp);
 		return 1;
 	}
