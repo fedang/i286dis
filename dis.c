@@ -466,7 +466,7 @@ int insn_snprintf(char *buf, size_t size, struct insn *ins)
     if (insn_is_bad(ins))
         return n;
 
-    if (insn_is_branch(ins))
+    if (insn_is_branch(ins) && ins->op != I286_RET && ins->op != I286_RETF)
         return n + branch_snprintf(buf + n, size - n, ins);
 
     struct oper *oper = ins->opers;
@@ -515,7 +515,11 @@ bool dis_pop_entry(struct dis *dis, uint32_t *entry)
 void dis_disasm(struct dis *dis)
 {
     while (dis_pop_entry(dis, &dis->ip)) {
+        if (dis->ip < dis->base)
+            continue;
+
         while (dis->ip < dis->limit) {
+
             if (dis->decoded[dis->ip - dis->base])
                 break;
 
