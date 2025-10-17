@@ -885,14 +885,58 @@ static struct optab encodings[256] = {
 	/* 0xFF */ { decode_group4, 0xFF },
 };
 
+static bool decode_group6(struct dis *dis, struct insn *ins, uintptr_t arg)
+{
+    (void)arg;
+    const enum opcode group[8] = {
+        I286_SLDT,
+        I286_STR,
+        I286_LLDT,
+        I286_LTR,
+        I286_VERR,
+        I286_VERW,
+        I286_BAD,
+        I286_BAD,
+    };
+
+    uint8_t reg;
+    if (!try_modrm(dis, &reg, &ins->opers, true))
+        return false;
+
+    ins->op = group[reg & 0x7];
+    return true;
+}
+
+static bool decode_group7(struct dis *dis, struct insn *ins, uintptr_t arg)
+{
+    (void)arg;
+    const enum opcode group[8] = {
+        I286_SGDT,
+        I286_SIDT,
+        I286_LGDT,
+        I286_LIDT,
+        I286_SMSW,
+        I286_BAD,
+        I286_LMSW,
+        I286_BAD,
+    };
+
+    uint8_t reg;
+    if (!try_modrm(dis, &reg, &ins->opers, true))
+        return false;
+
+    ins->op = group[reg & 0x7];
+    return true;
+}
+
 static struct optab encodings_0f[256] = {
-	/* 0x00 */ { NULL, 0 },
-	/* 0x01 */ { NULL, 0 },
-	/* 0x02 */ { NULL, 0 },
+	/* 0x00 */ { decode_group6, 0 },
+	/* 0x01 */ { decode_group7, 0 },
+	/* 0x02 */ { decode_modrm, I286_LAR | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0x03 */ { NULL, 0 },
 	/* 0x04 */ { NULL, 0 },
 	/* 0x05 */ { NULL, 0 },
-	/* 0x06 */ { NULL, 0 },
+	/* 0x06 */ { decode_simple, I286_CLTS },
 	/* 0x07 */ { NULL, 0 },
 	/* 0x08 */ { NULL, 0 },
 	/* 0x09 */ { NULL, 0 },
@@ -1014,22 +1058,22 @@ static struct optab encodings_0f[256] = {
 	/* 0x7D */ { NULL, 0 },
 	/* 0x7E */ { NULL, 0 },
 	/* 0x7F */ { NULL, 0 },
-	/* 0x80 */ { NULL, 0 },
-	/* 0x81 */ { NULL, 0 },
-	/* 0x82 */ { NULL, 0 },
-	/* 0x83 */ { NULL, 0 },
-	/* 0x84 */ { NULL, 0 },
-	/* 0x85 */ { NULL, 0 },
-	/* 0x86 */ { NULL, 0 },
-	/* 0x87 */ { NULL, 0 },
-	/* 0x88 */ { NULL, 0 },
-	/* 0x89 */ { NULL, 0 },
-	/* 0x8A */ { NULL, 0 },
-	/* 0x8B */ { NULL, 0 },
-	/* 0x8C */ { NULL, 0 },
-	/* 0x8D */ { NULL, 0 },
-	/* 0x8E */ { NULL, 0 },
-	/* 0x8F */ { NULL, 0 },
+	/* 0x80 */ { decode_imm, I286_JO | REG_WIDE << 16 },
+	/* 0x81 */ { decode_imm, I286_JNO | REG_WIDE << 16 },
+	/* 0x82 */ { decode_imm, I286_JB | REG_WIDE << 16 },
+	/* 0x83 */ { decode_imm, I286_JNB | REG_WIDE << 16 },
+	/* 0x84 */ { decode_imm, I286_JE | REG_WIDE << 16 },
+	/* 0x85 */ { decode_imm, I286_JNE | REG_WIDE << 16 },
+	/* 0x86 */ { decode_imm, I286_JNA | REG_WIDE << 16 },
+	/* 0x87 */ { decode_imm, I286_JA | REG_WIDE << 16 },
+	/* 0x88 */ { decode_imm, I286_JS | REG_WIDE << 16 },
+	/* 0x89 */ { decode_imm, I286_JNS | REG_WIDE << 16 },
+	/* 0x8A */ { decode_imm, I286_JP | REG_WIDE << 16 },
+	/* 0x8B */ { decode_imm, I286_JNP | REG_WIDE << 16 },
+	/* 0x8C */ { decode_imm, I286_JL | REG_WIDE << 16 },
+	/* 0x8D */ { decode_imm, I286_JLE | REG_WIDE << 16 },
+	/* 0x8E */ { decode_imm, I286_JGE | REG_WIDE << 16 },
+	/* 0x8F */ { decode_imm, I286_JG | REG_WIDE << 16 },
 	/* 0x90 */ { NULL, 0 },
 	/* 0x91 */ { NULL, 0 },
 	/* 0x92 */ { NULL, 0 },
@@ -1061,7 +1105,7 @@ static struct optab encodings_0f[256] = {
 	/* 0xAC */ { NULL, 0 },
 	/* 0xAD */ { NULL, 0 },
 	/* 0xAE */ { NULL, 0 },
-	/* 0xAF */ { NULL, 0 },
+	/* 0xAF */ { decode_modrm, I286_IMUL | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0xB0 */ { NULL, 0 },
 	/* 0xB1 */ { NULL, 0 },
 	/* 0xB2 */ { NULL, 0 },
@@ -1174,4 +1218,3 @@ struct insn *dis_decode(struct dis *dis)
     ins->len = dis->ip - start;
     return ins;
 }
-

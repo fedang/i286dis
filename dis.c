@@ -207,6 +207,11 @@ struct oper *oper_alloc_seg(enum seg seg)
     return oper;
 }
 
+void oper_free(struct oper *oper)
+{
+    free(oper);
+}
+
 bool insn_is_bad(struct insn *ins)
 {
     return ins->op == I286_BAD;
@@ -486,6 +491,18 @@ struct insn *insn_alloc(uint32_t addr)
     return ins;
 }
 
+void insn_free(struct insn *ins)
+{
+    struct oper *tmp, *oper = ins->opers;
+    free(ins);
+
+    while (oper) {
+        tmp = oper->next;
+        free(oper);
+        oper = tmp;
+    }
+}
+
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base)
 {
     memset(dis, 0, sizeof(struct dis));
@@ -493,6 +510,15 @@ void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base
     dis->limit = len + base;
     dis->bytes = bytes;
     dis->decoded = calloc(len, sizeof(struct insn *));
+}
+
+void dis_deinit(struct dis *dis)
+{
+    for (size_t i = 0; i < dis->limit - dis->base; i++) {
+        if (dis->decoded[i])
+            insn_free(dis->decoded[i]);
+    }
+    free(dis->decoded);
 }
 
 void dis_push_entry(struct dis *dis, uint32_t entry)

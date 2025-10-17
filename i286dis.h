@@ -239,6 +239,8 @@ struct oper *oper_alloc_reg(enum reg reg);
 
 struct oper *oper_alloc_seg(enum seg seg);
 
+void oper_free(struct oper *oper);
+
 bool insn_is_bad(struct insn *ins);
 
 bool insn_is_terminator(struct insn *ins);
@@ -253,7 +255,11 @@ int insn_snprintf(char *buf, size_t size, struct insn *ins);
 
 struct insn *insn_alloc(uint32_t addr);
 
+void insn_free(struct insn *ins);
+
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base);
+
+void dis_deinit(struct dis *dis);
 
 void dis_push_entry(struct dis *dis, uint32_t entry);
 

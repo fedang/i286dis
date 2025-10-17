@@ -45,6 +45,8 @@ void disasm(uint8_t *bytes, size_t len)
         insn_snprintf(buf + off, sizeof(buf) - off, ins);
         printf("\t\t\t%s\n", buf);
     }
+
+    dis_deinit(&dis);
 }
 
 int main(int argc, char **argv)
