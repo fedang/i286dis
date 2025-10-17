@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ctype.h>
 
 #include "i286dis.h"
 
@@ -16,7 +17,13 @@ void disasm(uint8_t *bytes, size_t len)
 
     while (dis_iterate(&dis, &idx, &ins)) {
         if (!ins) {
-            printf("%x: .byte 0x%02x\n", idx + dis.base - 1, bytes[idx - 1]);
+            uint8_t byte = bytes[idx - 1];
+            printf("%x: .byte 0x%02x", idx + dis.base - 1, byte);
+
+            if (isprint(byte))
+                printf(" ; '%c'", byte);
+
+            puts("");
             continue;
         }
 

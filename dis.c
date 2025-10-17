@@ -264,7 +264,7 @@ bool insn_is_branch(struct insn *ins)
     return insn_is_terminator(ins);
 }
 
-bool insn_get_branch(struct insn *ins, int32_t *target)
+bool insn_get_branch(struct insn *ins, uint32_t *target)
 {
     switch (ins->op) {
         case I286_CALL:
@@ -276,8 +276,9 @@ bool insn_get_branch(struct insn *ins, int32_t *target)
 
         case I286_CALLF:
             if (ins->opers->flags == I286_OPER_IMM32) {
-                *target = (ins->opers->imm32 >> 16) << 4
-                        | (ins->opers->imm32 & 0xFFFF);
+                uint32_t seg = ins->opers->imm32 >> 16;
+                uint32_t off = ins->opers->imm32 & 0xFFFF;
+                *target = (seg << 4) + off;
                 return true;
             }
             break;
@@ -329,8 +330,9 @@ bool insn_get_branch(struct insn *ins, int32_t *target)
 
         case I286_JMPF:
             if (ins->opers->flags == I286_OPER_IMM32) {
-                *target = (ins->opers->imm32 >> 16) << 4
-                        | (ins->opers->imm32 & 0xFFFF);
+                uint32_t seg = ins->opers->imm32 >> 16;
+                uint32_t off = ins->opers->imm32 & 0xFFFF;
+                *target = (seg << 4) + off;
                 return true;
             }
             break;
@@ -522,7 +524,7 @@ void dis_disasm(struct dis *dis)
             if (insn_is_bad(ins))
                 break;
 
-            int32_t branch;
+            uint32_t branch;
             if (insn_get_branch(ins, &branch))
                 dis_push_entry(dis, branch);
 

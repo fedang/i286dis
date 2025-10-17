@@ -247,7 +247,7 @@ bool insn_is_prefix(struct insn *ins);
 
 bool insn_is_branch(struct insn *ins);
 
-bool insn_get_branch(struct insn *ins, int32_t *target);
+bool insn_get_branch(struct insn *ins, uint32_t *target);
 
 int insn_snprintf(char *buf, size_t size, struct insn *ins);
 

@@ -4,6 +4,8 @@ bits 16
 mov ax, [0x1234]
 mov [0x2345], bx
 
+imul ax, [bx+0x30], 10
+
 nop
 clc
 cli
@@ -73,8 +75,10 @@ val2 dw 0x5678
 
 skip:
 
+mov cx, [val1]
+
 inc word [val1]     ; FF /0
 dec word [val2]     ; FF /1
 call word [val1]    ; FF /2
-jmp word [val2]     ; FF /4
 push word [val1]
+jmp word [val2]     ; FF /4

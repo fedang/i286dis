@@ -415,6 +415,21 @@ static bool decode_enter(struct dis *dis, struct insn *ins, uintptr_t arg)
     return try_fetch8(dis, &ins->opers->next->imm8);
 }
 
+static bool decode_imul(struct dis *dis, struct insn *ins, uintptr_t arg)
+{
+    ins->op = I286_IMUL;
+    if (!try_modrm_full(dis, &ins->opers, DIR_TO_REG))
+        return false;
+
+    if (arg) {
+        ins->opers->next->next = oper_alloc(I286_OPER_IMM16);
+        return try_fetch16(dis, &ins->opers->next->next->imm16);
+    }
+
+    ins->opers->next->next = oper_alloc(I286_OPER_IMM8);
+    return try_fetch8(dis, &ins->opers->next->next->imm8);
+}
+
 static bool decode_moff(struct dis *dis, struct insn *ins, uintptr_t arg)
 {
     ins->op = arg & 0xFFFF;
@@ -450,6 +465,27 @@ static bool decode_moff(struct dis *dis, struct insn *ins, uintptr_t arg)
     }
 
     return true;
+}
+
+static bool decode_mov(struct dis *dis, struct insn *ins, uintptr_t arg)
+{
+    uint8_t reg;
+    bool wide = arg & REG_WIDE;
+
+    if (!try_modrm(dis, &reg, &ins->opers, wide))
+        return false;
+
+    if (reg != 0)
+        return false;
+
+    ins->op = I286_MOV;
+    if (wide) {
+        ins->opers->next = oper_alloc(I286_OPER_IMM16);
+        return try_fetch16(dis, &ins->opers->next->imm16);
+    }
+
+    ins->opers->next = oper_alloc(I286_OPER_IMM8);
+    return try_fetch8(dis, &ins->opers->next->imm8);
 }
 
 static bool decode_group1(struct dis *dis, struct insn *ins, uintptr_t arg)
@@ -684,10 +720,10 @@ static struct optab encodings[256] = {
 	/* 0x65 */ { NULL, 0 },
 	/* 0x66 */ { NULL, 0 },
 	/* 0x67 */ { NULL, 0 },
-	/* 0x68 */ { NULL, 0 },
-	/* 0x69 */ { NULL, 0 },
+	/* 0x68 */ { decode_imm, I286_PUSH | REG_WIDE << 16 },
+	/* 0x69 */ { decode_imul, 1 },
 	/* 0x6A */ { decode_imm, I286_PUSH },
-	/* 0x6B */ { decode_imm, I286_PUSH | REG_WIDE << 16 },
+	/* 0x6B */ { decode_imul, 0 },
 	/* 0x6C */ { decode_simple, I286_INSB },
 	/* 0x6D */ { decode_simple, I286_INSW },
 	/* 0x6E */ { decode_simple, I286_OUTSB },
@@ -737,8 +773,8 @@ static struct optab encodings[256] = {
 	/* 0x9A */ { decode_jmpfar, I286_CALL },
 	/* 0x9B */ { decode_simple, I286_WAIT },
 	/* 0x9C */ { decode_simple, I286_PUSHF },
-	/* 0x9D */ { NULL, 0 },
-	/* 0x9E */ { NULL, 0 },
+	/* 0x9D */ { decode_simple, I286_POPF },
+	/* 0x9E */ { decode_simple, I286_SAHF },
 	/* 0x9F */ { decode_simple, I286_LAHF },
 	/* 0xA0 */ { decode_moff, I286_MOV | DIR_TO_REG << 16 },
 	/* 0xA1 */ { decode_moff, I286_MOV | (DIR_TO_REG | REG_WIDE) << 16 },
@@ -778,8 +814,8 @@ static struct optab encodings[256] = {
 	/* 0xC3 */ { decode_simple, I286_RET },
 	/* 0xC4 */ { decode_modrm, I286_LES | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0xC5 */ { decode_modrm, I286_LDS | (DIR_TO_REG | REG_WIDE) << 16 },
-	/* 0xC6 */ { NULL, 0 },
-	/* 0xC7 */ { NULL, 0 },
+	/* 0xC6 */ { decode_mov, 0 },
+	/* 0xC7 */ { decode_mov, REG_WIDE },
 	/* 0xC8 */ { decode_enter, 0 },
 	/* 0xC9 */ { decode_simple, I286_LEAVE },
 	/* 0xCA */ { decode_imm, I286_RETF | REG_WIDE << 16 },
