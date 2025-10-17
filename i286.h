@@ -216,19 +216,7 @@ struct dis {
     struct insn **decoded;
 };
 
-const char *opcode_mnemonic(enum opcode op);
-
-bool insn_is_bad(struct insn *ins);
-
-bool insn_is_terminator(struct insn *ins);
-
-bool insn_is_prefix(struct insn *ins);
-
-bool insn_is_branch(struct insn *ins);
-
-bool insn_get_branch(struct insn *ins, int16_t *disp);
-
-struct insn *insn_alloc(uint32_t addr);
+extern const char *opcode_mnemonics[];
 
 struct oper *oper_alloc(enum oper_flag flags);
 
@@ -242,11 +230,25 @@ struct oper *oper_alloc_reg(uint16_t reg);
 
 struct oper *oper_alloc_seg(uint16_t reg);
 
+bool insn_is_bad(struct insn *ins);
+
+bool insn_is_terminator(struct insn *ins);
+
+bool insn_is_prefix(struct insn *ins);
+
+bool insn_is_branch(struct insn *ins);
+
+int insn_snprintf(char *buf, size_t size, struct insn *ins);
+
+struct insn *insn_alloc(uint32_t addr);
+
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base);
 
 void dis_push_entry(struct dis *dis, uint32_t entry);
 
 bool dis_pop_entry(struct dis *dis, uint32_t *entry);
+
+bool dis_get_branch(struct dis *dis, struct insn *ins, int32_t *target);
 
 struct insn *dis_decode(struct dis *dis);
 

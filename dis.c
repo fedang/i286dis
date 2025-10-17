@@ -1,10 +1,11 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "i286.h"
 
-static const char *opcode_string[] = {
+const char *opcode_mnemonics[] = {
     "(bad)",
     "aaa",
     "aad",
@@ -133,10 +134,47 @@ static const char *opcode_string[] = {
     "ss",
 };
 
-const char *opcode_mnemonic(enum opcode op)
+struct oper *oper_alloc(enum oper_flag flags)
 {
-    assert(op <= I286_PRE_SS);
-    return opcode_string[op];
+    struct oper *oper = malloc(sizeof(struct oper));
+    oper->flags = flags;
+    oper->next = NULL;
+    return oper;
+}
+
+struct oper *oper_alloc_imm8(uint8_t imm8)
+{
+    struct oper *oper = oper_alloc(I286_OPER_IMM8);
+    oper->imm8 = imm8;
+    return oper;
+}
+
+struct oper *oper_alloc_imm16(uint16_t imm16)
+{
+    struct oper *oper = oper_alloc(I286_OPER_IMM16);
+    oper->imm16 = imm16;
+    return oper;
+}
+
+struct oper *oper_alloc_imm32(uint16_t imm32)
+{
+    struct oper *oper = oper_alloc(I286_OPER_IMM32);
+    oper->imm32 = imm32;
+    return oper;
+}
+
+struct oper *oper_alloc_reg(uint16_t reg)
+{
+    struct oper *oper = oper_alloc(I286_OPER_REG);
+    oper->reg = reg;
+    return oper;
+}
+
+struct oper *oper_alloc_seg(uint16_t seg)
+{
+    struct oper *oper = oper_alloc(I286_OPER_SEG);
+    oper->seg = seg;
+    return oper;
 }
 
 bool insn_is_bad(struct insn *ins)
@@ -193,63 +231,58 @@ bool insn_is_branch(struct insn *ins)
     return insn_is_terminator(ins);
 }
 
-bool insn_get_branch(struct insn *ins, int16_t *disp)
+int insn_snprintf(char *buf, size_t size, struct insn *ins)
 {
-    switch (ins->op) {
-        case I286_JO:
-        case I286_JNO:
-        case I286_JB:
-        case I286_JNB:
-        case I286_JE:
-        case I286_JNE:
-        case I286_JNA:
-        case I286_JA:
-        case I286_JS:
-        case I286_JNS:
-        case I286_JP:
-        case I286_JNP:
-        case I286_JL:
-        case I286_JLE:
-        case I286_JGE:
-        case I286_JG:
-        case I286_JCXZ:
-            if (ins->opers->flags == I286_OPER_IMM16) {
-                *disp = ins->opers->imm16;
-                return true;
-            }
+    int n = snprintf(buf, size, "%s", opcode_mnemonics[ins->op]);
 
-            assert(ins->opers->flags == I286_OPER_IMM8);
-            *disp = ins->opers->imm8;
-            return true;
+    // Special syntax
+    if (ins->op == I286_JMP) {
+        switch (ins->opers->flags) {
+            case I286_OPER_IMM8:
+                n += snprintf(buf + n, size - n, " short %hhd", ins->opers->imm8);
+                break;
 
-        case I286_JMP:
-            if (ins->opers->flags == I286_OPER_IMM16) {
-                *disp = ins->opers->imm16;
-                return true;
-            }
+            case I286_OPER_IMM16:
+                n += snprintf(buf + n, size - n, " near %hd", ins->opers->imm16);
+                break;
 
-            if (ins->opers->flags == I286_OPER_IMM8) {
-                *disp = ins->opers->imm8;
-                return true;
-            }
-            break;
+            case I286_OPER_IMM32:
+                n += snprintf(buf + n, size - n, " far %hx:%hx",
+                        ins->opers->imm32 >> 16, ins->opers->imm32);
+                break;
+        }
 
-        case I286_LOOP:
-        case I286_LOOPZ:
-        case I286_LOOPNZ:
-            assert(ins->opers->flags == I286_OPER_IMM8);
-            *disp = ins->opers->imm8;
-            return true;
-
-        case I286_CALL:
-            if (ins->opers->flags == I286_OPER_IMM16) {
-                *disp = ins->opers->imm16;
-                return true;
-            }
-            break;
+        return n;
     }
 
-    return false;
+    struct oper *oper = ins->opers;
+    while (oper) {
+        n += snprintf(buf + n, size - n, oper == ins->opers ? " " : ", ");
+
+        switch (oper->flags) {
+            case I286_OPER_IMM8:
+                break;
+
+            case I286_OPER_IMM16:
+                break;
+
+            case I286_OPER_IMM32:
+                break;
+
+            case I286_OPER_REG:
+                break;
+
+            case I286_OPER_SEG:
+                break;
+
+            case I286_OPER_MEM:
+                break;
+        }
+
+        oper = oper->next;
+    }
+
+    return n;
 }
 
 struct insn *insn_alloc(uint32_t addr)
@@ -257,49 +290,6 @@ struct insn *insn_alloc(uint32_t addr)
     struct insn *ins = calloc(1, sizeof(struct insn));
     ins->addr = addr;
     return ins;
-}
-
-struct oper *oper_alloc(enum oper_flag flags)
-{
-    struct oper *oper = malloc(sizeof(struct oper));
-    oper->flags = flags;
-    oper->next = NULL;
-    return oper;
-}
-
-struct oper *oper_alloc_imm8(uint8_t imm8)
-{
-    struct oper *oper = oper_alloc(I286_OPER_IMM8);
-    oper->imm8 = imm8;
-    return oper;
-}
-
-struct oper *oper_alloc_imm16(uint16_t imm16)
-{
-    struct oper *oper = oper_alloc(I286_OPER_IMM16);
-    oper->imm16 = imm16;
-    return oper;
-}
-
-struct oper *oper_alloc_imm32(uint16_t imm32)
-{
-    struct oper *oper = oper_alloc(I286_OPER_IMM32);
-    oper->imm32 = imm32;
-    return oper;
-}
-
-struct oper *oper_alloc_reg(uint16_t reg)
-{
-    struct oper *oper = oper_alloc(I286_OPER_REG);
-    oper->reg = reg;
-    return oper;
-}
-
-struct oper *oper_alloc_seg(uint16_t seg)
-{
-    struct oper *oper = oper_alloc(I286_OPER_SEG);
-    oper->seg = seg;
-    return oper;
 }
 
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base)
@@ -326,6 +316,68 @@ bool dis_pop_entry(struct dis *dis, uint32_t *entry)
 
     *entry = dis->entry_list[--dis->entry_n];
     return true;
+}
+
+bool dis_get_branch(struct dis *dis, struct insn *ins, int32_t *target)
+{
+    switch (ins->op) {
+        case I286_JO:
+        case I286_JNO:
+        case I286_JB:
+        case I286_JNB:
+        case I286_JE:
+        case I286_JNE:
+        case I286_JNA:
+        case I286_JA:
+        case I286_JS:
+        case I286_JNS:
+        case I286_JP:
+        case I286_JNP:
+        case I286_JL:
+        case I286_JLE:
+        case I286_JGE:
+        case I286_JG:
+        case I286_JCXZ:
+            if (ins->opers->flags == I286_OPER_IMM16) {
+                *target = dis->ip + (int16_t)ins->opers->imm16;
+                return true;
+            }
+
+            assert(ins->opers->flags == I286_OPER_IMM8);
+            *target = dis->ip + (int16_t)ins->opers->imm8;
+            return true;
+
+        case I286_JMP:
+            if (ins->opers->flags == I286_OPER_IMM16) {
+                *target = dis->ip + (int16_t)ins->opers->imm16;
+                return true;
+            }
+
+            if (ins->opers->flags == I286_OPER_IMM8) {
+                *target = dis->ip + (int16_t)ins->opers->imm8;
+                return true;
+            }
+
+            assert(ins->opers->flags == I286_OPER_IMM32);
+            *target = ins->opers->imm32 & 0xFFFF;
+            return true;
+
+        case I286_LOOP:
+        case I286_LOOPZ:
+        case I286_LOOPNZ:
+            assert(ins->opers->flags == I286_OPER_IMM8);
+            *target = dis->ip + (int16_t)ins->opers->imm8;
+            return true;
+
+        case I286_CALL:
+            if (ins->opers->flags == I286_OPER_IMM16) {
+                *target = dis->ip + (int16_t)ins->opers->imm16;
+                return true;
+            }
+            break;
+    }
+
+    return false;
 }
 
 static bool try_fetch8(struct dis *dis, uint8_t *v)
@@ -420,9 +472,9 @@ void dis_disasm(struct dis *dis)
             if (insn_is_bad(ins))
                 break;
 
-            int16_t branch;
-            if (insn_get_branch(ins, &branch))
-                dis_push_entry(dis, dis->ip + branch);
+            int32_t branch;
+            if (dis_get_branch(dis, ins, &branch))
+                dis_push_entry(dis, branch);
 
             if (insn_is_terminator(ins))
                 break;
@@ -430,14 +482,14 @@ void dis_disasm(struct dis *dis)
     }
 }
 
-#include <stdio.h>
-
 void disasm(uint8_t *bytes, size_t len)
 {
     struct dis dis;
     dis_init(&dis, bytes, len, 0x7c00);
     dis_push_entry(&dis, 0x7c00);
     dis_disasm(&dis);
+
+    char buf[100];
 
     size_t i = 0;
     while (i < len) {
@@ -447,7 +499,9 @@ void disasm(uint8_t *bytes, size_t len)
             continue;
         }
 
-        printf("%x: %s\n", ins->addr, opcode_mnemonic(ins->op));
+        insn_snprintf(buf, sizeof(buf), ins);
+
+        printf("%x: %s\n", ins->addr, buf);
 
         i += ins->len;
     }
