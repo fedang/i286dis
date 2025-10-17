@@ -16,7 +16,7 @@ void disasm(uint8_t *bytes, size_t len)
 
     while (dis_iterate(&dis, &idx, &ins)) {
         if (!ins) {
-            printf("%x: .b %#02x\n", idx + dis.base - 1, bytes[idx - 1]);
+            printf("%x: .b 0x%02x\n", idx + dis.base - 1, bytes[idx - 1]);
             continue;
         }
 

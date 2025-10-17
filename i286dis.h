@@ -33,6 +33,7 @@ enum seg {
 
 enum mem {
     I286_MEM_ABS,
+    I286_MEM_MOFF,
     I286_MEM_DS_BX_SI,
     I286_MEM_DS_BX_DI,
     I286_MEM_SS_BP_SI,
