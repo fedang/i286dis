@@ -66,5 +66,15 @@ shl bx, 1
 shr cx, 1
 
 hlt
-nop
-hlt
+jmp skip
+
+val1 dw 0x1234
+val2 dw 0x5678
+
+skip:
+
+inc word [val1]     ; FF /0
+dec word [val2]     ; FF /1
+call word [val1]    ; FF /2
+jmp word [val2]     ; FF /4
+push word [val1]

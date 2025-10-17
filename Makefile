@@ -2,7 +2,7 @@ CFLAGS ?= -Wall -Wextra -Wno-switch -O1 -g3
 
 LIB  := libi286dis.a
 TEST := test test.com
-SRCS := dis.c
+SRCS := dis.c decode.c
 OBJS := $(SRCS:.c=.o)
 
 .PHONY: all
