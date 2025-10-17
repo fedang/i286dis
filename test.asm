@@ -14,6 +14,8 @@ nop
 label2:
 nop
 
+int3
+
 loop label2
 
 mov al, 0x12
