@@ -62,7 +62,7 @@ struct oper {
 		enum seg seg;
 		struct {
 			enum mem mode;
-			uint16_t disp;
+			int16_t disp;
 		} mem;
 	};
 	struct oper *next;
@@ -152,6 +152,7 @@ enum opcode {
     I286_OUTSB,
     I286_OUTSW,
     I286_POP,
+    I286_POPA,
     I286_POPF,
     I286_PUSH,
     I286_PUSHA,
@@ -159,6 +160,7 @@ enum opcode {
     I286_RCL,
     I286_RCR,
     I286_RET,
+    I286_RETF,
     I286_ROL,
     I286_ROR,
     I286_SAHF,
@@ -216,6 +218,10 @@ struct dis {
     struct insn **decoded;
 };
 
+extern const char *reg_mnemonics[];
+
+extern const char *seg_mnemonics[];
+
 extern const char *opcode_mnemonics[];
 
 struct oper *oper_alloc(enum oper_flag flags);
@@ -226,9 +232,9 @@ struct oper *oper_alloc_imm16(uint16_t imm16);
 
 struct oper *oper_alloc_imm32(uint16_t imm32);
 
-struct oper *oper_alloc_reg(uint16_t reg);
+struct oper *oper_alloc_reg(enum reg reg);
 
-struct oper *oper_alloc_seg(uint16_t reg);
+struct oper *oper_alloc_seg(enum seg seg);
 
 bool insn_is_bad(struct insn *ins);
 
