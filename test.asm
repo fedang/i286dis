@@ -53,9 +53,18 @@ add [di], cx
 add byte [bx+si], 0x99
 sub byte [bp+di], 0x88
 
+cmp ax, 10
+jz sus
+
+nop
+
+sus:
+
 rol al, 1
 ror ax, 1
 shl bx, 1
 shr cx, 1
 
+hlt
+nop
 hlt

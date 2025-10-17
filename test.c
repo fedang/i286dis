@@ -16,7 +16,7 @@ void disasm(uint8_t *bytes, size_t len)
 
     while (dis_iterate(&dis, &idx, &ins)) {
         if (!ins) {
-            printf("%x: .b 0x%02x\n", idx + dis.base - 1, bytes[idx - 1]);
+            printf("%x: .byte 0x%02x\n", idx + dis.base - 1, bytes[idx - 1]);
             continue;
         }
 
@@ -48,14 +48,14 @@ int main(int argc, char **argv)
 	}
 
 	uint8_t buf[400];
-	if (fread(buf, 1, sizeof(buf), fp) == 0) {
+    size_t len = fread(buf, 1, sizeof(buf), fp);
+	if (len == 0) {
 		fprintf(stderr, "Could not read the file\n");
 		fclose(fp);
 		return 1;
 	}
 
-	disasm(buf, sizeof(buf));
-
 	fclose(fp);
+	disasm(buf, len);
 	return 0;
 }
