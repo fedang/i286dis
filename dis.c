@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "i286.h"
+#include "i286dis.h"
 
 const char *opcode_mnemonics[] = {
     "(bad)",
@@ -231,25 +231,94 @@ bool insn_is_branch(struct insn *ins)
     return insn_is_terminator(ins);
 }
 
+bool insn_get_branch(struct insn *ins, int32_t *target)
+{
+    switch (ins->op) {
+        case I286_JO:
+        case I286_JNO:
+        case I286_JB:
+        case I286_JNB:
+        case I286_JE:
+        case I286_JNE:
+        case I286_JNA:
+        case I286_JA:
+        case I286_JS:
+        case I286_JNS:
+        case I286_JP:
+        case I286_JNP:
+        case I286_JL:
+        case I286_JLE:
+        case I286_JGE:
+        case I286_JG:
+        case I286_JCXZ:
+            if (ins->opers->flags == I286_OPER_IMM16) {
+                *target = ins->addr + ins->len + (int32_t)ins->opers->imm16;
+                return true;
+            }
+
+            assert(ins->opers->flags == I286_OPER_IMM8);
+            *target = ins->addr + ins->len + (int32_t)ins->opers->imm8;
+            return true;
+
+        case I286_JMP:
+            if (ins->opers->flags == I286_OPER_IMM16) {
+                *target = ins->addr + ins->len + (int32_t)ins->opers->imm16;
+                return true;
+            }
+
+            if (ins->opers->flags == I286_OPER_IMM8) {
+                *target = ins->addr + ins->len + (int32_t)ins->opers->imm8;
+                return true;
+            }
+
+            assert(ins->opers->flags == I286_OPER_IMM32);
+            *target = ins->opers->imm32 & 0xFFFF;
+            return true;
+
+        case I286_LOOP:
+        case I286_LOOPZ:
+        case I286_LOOPNZ:
+            assert(ins->opers->flags == I286_OPER_IMM8);
+            *target = ins->addr + ins->len + (int32_t)ins->opers->imm8;
+            return true;
+
+        case I286_CALL:
+            if (ins->opers->flags == I286_OPER_IMM16) {
+                *target = ins->addr + ins->len + (int32_t)ins->opers->imm16;
+                return true;
+            }
+            break;
+    }
+
+    return false;
+}
+
 int insn_snprintf(char *buf, size_t size, struct insn *ins)
 {
     int n = snprintf(buf, size, "%s", opcode_mnemonics[ins->op]);
 
     // Special syntax
     if (ins->op == I286_JMP) {
+        uint32_t addr = ins->addr + ins->len;
         switch (ins->opers->flags) {
+            // Show relative or absolute?
             case I286_OPER_IMM8:
-                n += snprintf(buf + n, size - n, " short %hhd", ins->opers->imm8);
+                addr += (int32_t)ins->opers->imm8;
+                n += snprintf(buf + n, size - n, " short %x", addr);
                 break;
 
             case I286_OPER_IMM16:
-                n += snprintf(buf + n, size - n, " near %hd", ins->opers->imm16);
+                addr += (int32_t)ins->opers->imm16;
+                n += snprintf(buf + n, size - n, " near %x", addr);
                 break;
 
             case I286_OPER_IMM32:
                 n += snprintf(buf + n, size - n, " far %hx:%hx",
                         ins->opers->imm32 >> 16, ins->opers->imm32);
                 break;
+
+            default:
+                n += snprintf(buf + n, size - n, " (bad)");
         }
 
         return n;
@@ -318,74 +387,13 @@ bool dis_pop_entry(struct dis *dis, uint32_t *entry)
     return true;
 }
 
-bool dis_get_branch(struct dis *dis, struct insn *ins, int32_t *target)
-{
-    switch (ins->op) {
-        case I286_JO:
-        case I286_JNO:
-        case I286_JB:
-        case I286_JNB:
-        case I286_JE:
-        case I286_JNE:
-        case I286_JNA:
-        case I286_JA:
-        case I286_JS:
-        case I286_JNS:
-        case I286_JP:
-        case I286_JNP:
-        case I286_JL:
-        case I286_JLE:
-        case I286_JGE:
-        case I286_JG:
-        case I286_JCXZ:
-            if (ins->opers->flags == I286_OPER_IMM16) {
-                *target = dis->ip + (int16_t)ins->opers->imm16;
-                return true;
-            }
-
-            assert(ins->opers->flags == I286_OPER_IMM8);
-            *target = dis->ip + (int16_t)ins->opers->imm8;
-            return true;
-
-        case I286_JMP:
-            if (ins->opers->flags == I286_OPER_IMM16) {
-                *target = dis->ip + (int16_t)ins->opers->imm16;
-                return true;
-            }
-
-            if (ins->opers->flags == I286_OPER_IMM8) {
-                *target = dis->ip + (int16_t)ins->opers->imm8;
-                return true;
-            }
-
-            assert(ins->opers->flags == I286_OPER_IMM32);
-            *target = ins->opers->imm32 & 0xFFFF;
-            return true;
-
-        case I286_LOOP:
-        case I286_LOOPZ:
-        case I286_LOOPNZ:
-            assert(ins->opers->flags == I286_OPER_IMM8);
-            *target = dis->ip + (int16_t)ins->opers->imm8;
-            return true;
-
-        case I286_CALL:
-            if (ins->opers->flags == I286_OPER_IMM16) {
-                *target = dis->ip + (int16_t)ins->opers->imm16;
-                return true;
-            }
-            break;
-    }
-
-    return false;
-}
-
 static bool try_fetch8(struct dis *dis, uint8_t *v)
 {
     if (dis->ip >= dis->limit)
         return false;
 
-    *v = dis->bytes[dis->ip++ - dis->base];
+    *v = dis->bytes[dis->ip - dis->base];
+    dis->ip++;
     return true;
 }
 
@@ -394,8 +402,10 @@ static bool try_fetch16(struct dis *dis, uint16_t *v)
     if (dis->ip + 1 >= dis->limit)
         return false;
 
-    *v = (uint16_t)dis->bytes[dis->ip++ - dis->base]
-       | ((uint16_t)dis->bytes[dis->ip++ - dis->base] << 8);
+    *v = (uint16_t)dis->bytes[dis->ip - dis->base]
+       | ((uint16_t)dis->bytes[dis->ip + 1 - dis->base] << 8);
+
+    dis->ip += 2;
     return true;
 }
 
@@ -404,10 +414,12 @@ static bool try_fetch32(struct dis *dis, uint32_t *v)
     if (dis->ip + 3 >= dis->limit)
         return false;
 
-    *v = (uint32_t)dis->bytes[dis->ip++ - dis->base]
-       | ((uint32_t)dis->bytes[dis->ip++ - dis->base] << 8)
-       | ((uint32_t)dis->bytes[dis->ip++ - dis->base] << 16)
-       | ((uint32_t)dis->bytes[dis->ip++ - dis->base] << 24);
+    *v = (uint32_t)dis->bytes[dis->ip - dis->base]
+       | ((uint32_t)dis->bytes[dis->ip + 1 - dis->base] << 8)
+       | ((uint32_t)dis->bytes[dis->ip + 2 - dis->base] << 16)
+       | ((uint32_t)dis->bytes[dis->ip + 3 - dis->base] << 24);
+
+    dis->ip += 4;
     return true;
 }
 
@@ -473,7 +485,7 @@ void dis_disasm(struct dis *dis)
                 break;
 
             int32_t branch;
-            if (dis_get_branch(dis, ins, &branch))
+            if (insn_get_branch(ins, &branch))
                 dis_push_entry(dis, branch);
 
             if (insn_is_terminator(ins))
@@ -482,54 +494,12 @@ void dis_disasm(struct dis *dis)
     }
 }
 
-void disasm(uint8_t *bytes, size_t len)
+bool dis_iterate(struct dis *dis, uint32_t *index, struct insn **ins)
 {
-    struct dis dis;
-    dis_init(&dis, bytes, len, 0x7c00);
-    dis_push_entry(&dis, 0x7c00);
-    dis_disasm(&dis);
+    if (*index >= dis->limit - dis->base)
+        return false;
 
-    char buf[100];
-
-    size_t i = 0;
-    while (i < len) {
-        struct insn *ins = dis.decoded[i];
-        if (!ins) {
-            i++;
-            continue;
-        }
-
-        insn_snprintf(buf, sizeof(buf), ins);
-
-        printf("%x: %s\n", ins->addr, buf);
-
-        i += ins->len;
-    }
+    *ins = dis->decoded[*index];
+    *index += *ins ? (*ins)->len : 1;
+    return true;
 }
-
-int main(int argc, char **argv)
-{
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s file\n", argv[0]);
-		return 1;
-	}
-
-	FILE *fp = fopen(argv[1], "rb");
-	if (!fp) {
-		perror("Failed to open file");
-		return 1;
-	}
-
-	char buf[400];
-	if (fread(buf, sizeof(buf), 1, fp) != 1) {
-		fprintf(stderr, "Could not read the MBR\n");
-		fclose(fp);
-		return 1;
-	}
-
-	disasm(buf, sizeof(buf));
-
-	fclose(fp);
-	return 0;
-}
-

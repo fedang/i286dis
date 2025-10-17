@@ -1,5 +1,5 @@
-#ifndef I286_H
-#define I286_H
+#ifndef I286DIS_H
+#define I286DIS_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -238,6 +238,8 @@ bool insn_is_prefix(struct insn *ins);
 
 bool insn_is_branch(struct insn *ins);
 
+bool insn_get_branch(struct insn *ins, int32_t *target);
+
 int insn_snprintf(char *buf, size_t size, struct insn *ins);
 
 struct insn *insn_alloc(uint32_t addr);
@@ -248,10 +250,10 @@ void dis_push_entry(struct dis *dis, uint32_t entry);
 
 bool dis_pop_entry(struct dis *dis, uint32_t *entry);
 
-bool dis_get_branch(struct dis *dis, struct insn *ins, int32_t *target);
-
 struct insn *dis_decode(struct dis *dis);
 
 void dis_disasm(struct dis *dis);
+
+bool dis_iterate(struct dis *dis, uint32_t *index, struct insn **ins);
 
 #endif
