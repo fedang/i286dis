@@ -15,11 +15,22 @@ void disasm(uint8_t *bytes, size_t len)
     struct insn *ins;
 
     while (dis_iterate(&dis, &idx, &ins)) {
-        if (!ins)
+        if (!ins) {
+            printf("%x: .b %#02x\n", idx + dis.base - 1, bytes[idx - 1]);
             continue;
+        }
+
+        printf("%x: ", ins->addr);
+
+        while (insn_is_prefix(ins)) {
+            printf("%s ", opcode_mnemonics[ins->op]);
+
+            if (!dis_iterate(&dis, &idx, &ins) || !ins)
+                break;
+        }
 
         insn_snprintf(buf, sizeof(buf), ins);
-        printf("%x %x: %s\n", idx, ins->addr, buf);
+        printf("%s\n", buf);
     }
 }
 

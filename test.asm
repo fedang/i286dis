@@ -8,6 +8,8 @@ std
 cbw
 cwd
 
+rep movsb
+
 jmp short label1
 label1:
 nop
