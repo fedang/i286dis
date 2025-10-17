@@ -360,9 +360,18 @@ static bool decode_regenc(struct dis *dis, struct insn *ins, uintptr_t arg)
 
 static bool decode_pushpop(struct dis *dis, struct insn *ins, uintptr_t arg)
 {
-    (void)dis;
-    ins->opers = oper_alloc(I286_OPER_SEG);
+    // Special case: pop r/m16
+    if (arg == 0x8F) {
+        ins->op = I286_POP;
 
+        uint8_t reg;
+        if (!try_modrm(dis, &reg, &ins->opers, true))
+            return false;
+
+        return reg == 0;
+    }
+
+    ins->opers = oper_alloc(I286_OPER_SEG);
     switch (arg) {
         case 0x06:
             ins->op = I286_PUSH;
@@ -761,7 +770,7 @@ static struct optab encodings[256] = {
 	/* 0x8C */ { decode_modrm, I286_MOV | (DIR_TO_RM | REG_WIDE | REG_SEG) << 16 },
 	/* 0x8D */ { decode_modrm, I286_LEA | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0x8E */ { decode_modrm, I286_MOV | (DIR_TO_REG | REG_WIDE | REG_SEG) << 16 },
-	/* 0x8F */ { NULL, 0 },
+	/* 0x8F */ { decode_pushpop, 0x8F },
 	/* 0x90 */ { decode_simple, I286_NOP },
 	/* 0x91 */ { decode_regenc, 0x91 },
 	/* 0x92 */ { decode_regenc, 0x92 },

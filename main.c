@@ -10,34 +10,40 @@ void disasm(uint8_t *bytes, size_t len)
     dis_push_entry(&dis, 0x7c00);
     dis_disasm(&dis);
 
-    char buf[100];
+    char buf[0x100];
+    uint32_t off = 0;
 
-    uint32_t idx = 0;
     struct insn *ins;
+    uint32_t idx = 0;
 
     while (dis_iterate(&dis, &idx, &ins)) {
         if (!ins) {
             uint8_t byte = bytes[idx - 1];
-            printf("%x: .byte 0x%02x", idx + dis.base - 1, byte);
-
+            printf("%x: %02hhx\t\t\tdb ", idx + dis.base - 1, byte);
             if (isprint(byte))
-                printf(" ; '%c'", byte);
-
-            puts("");
+                printf("'%c'\n", byte);
+            else
+                printf("'\\x%hhx'\n", byte);
             continue;
         }
 
-        printf("%x: ", ins->addr);
+        printf("%x:", ins->addr);
+        off = 0;
 
         while (insn_is_prefix(ins)) {
-            printf("%s ", opcode_mnemonics[ins->op]);
+            printf(" %02x", bytes[idx - 1]);
+
+            off += snprintf(buf + off, sizeof(buf) - off, "%s ", opcode_mnemonics[ins->op]);
 
             if (!dis_iterate(&dis, &idx, &ins) || !ins)
                 break;
         }
 
-        insn_snprintf(buf, sizeof(buf), ins);
-        printf("%s\n", buf);
+        for (int i = 0; i < ins->len; i++)
+            printf(" %02x", bytes[idx - ins->len + i]);
+
+        insn_snprintf(buf + off, sizeof(buf) - off, ins);
+        printf("\t\t\t%s\n", buf);
     }
 }
 
@@ -54,7 +60,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint8_t buf[400];
+	uint8_t buf[442];
     size_t len = fread(buf, 1, sizeof(buf), fp);
 	if (len == 0) {
 		fprintf(stderr, "Could not read the file\n");

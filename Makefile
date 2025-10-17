@@ -1,20 +1,21 @@
 CFLAGS ?= -Wall -Wextra -Wno-switch -O1 -g3
 
 LIB  := libi286dis.a
-TEST := test test.com
+PROG := i286dis
+TEST := test.com
 SRCS := dis.c decode.c
 OBJS := $(SRCS:.c=.o)
 
 .PHONY: all
-all: $(LIB) $(TEST)
+all: $(LIB) $(PROG) $(TEST)
+
+$(PROG): main.o $(LIB)
+	$(CC) $(CFLAGS) $^ -o $@
 
 $(LIB): $(OBJS)
 	$(AR) rcs $@ $^
 
-test: test.o $(LIB)
-	$(CC) $(CFLAGS) $^ -o $@
-
-test.com: test.asm
+$(TEST): test.asm
 	nasm -f bin $^ -o $@
 
 %.o: %.c
@@ -22,4 +23,4 @@ test.com: test.asm
 
 .PHONY: clean
 clean:
-	rm -f $(OBJS) $(LIB) test
+	rm -f $(OBJS) $(LIB) $(TEST) $(PROG)
