@@ -1,13 +1,18 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "i286dis.h"
+
+static unsigned base = 0x7c00;
+static unsigned entry = 0x7c00;
 
 void disasm(uint8_t *bytes, size_t len)
 {
     struct dis dis;
-    dis_init(&dis, bytes, len, 0x7c00);
-    dis_push_entry(&dis, 0x7c00);
+    dis_init(&dis, bytes, len, base);
+    dis_push_entry(&dis, entry);
     dis_disasm(&dis);
 
     char buf[0x100];
@@ -49,28 +54,62 @@ void disasm(uint8_t *bytes, size_t len)
     dis_deinit(&dis);
 }
 
+#define usage(x) \
+    fprintf(stderr, "Usage: %s [-b BASE] [-e ENTRY] FILE\n", x);
+
 int main(int argc, char **argv)
 {
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s file\n", argv[0]);
+    int opt;
+
+    while ((opt = getopt(argc, argv, "b:e:")) != -1) {
+        switch (opt) {
+            case 'b':
+                base = strtol(optarg, NULL, 0);
+                entry = base;
+                break;
+            case 'e':
+                entry = strtol(optarg, NULL, 0);
+                break;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+	if (optind != argc - 1) {
+		usage(argv[0]);
 		return 1;
 	}
 
-	FILE *fp = fopen(argv[1], "rb");
+	FILE *fp = fopen(argv[optind], "rb");
 	if (!fp) {
 		perror("Failed to open file");
 		return 1;
 	}
 
-	uint8_t buf[442];
-    size_t len = fread(buf, 1, sizeof(buf), fp);
-	if (len == 0) {
+    if (fseek(fp, 0, SEEK_END) < 0) {
+        perror("Failed to seek");
+        return 1;
+    }
+
+    size_t size = ftell(fp);
+    rewind(fp);
+
+	uint8_t *buf = malloc(size);
+    if (!buf) {
+        perror("Failed to allocate");
+        return 1;
+    }
+
+    size_t len = fread(buf, 1, size, fp);
+	if (len != size) {
 		fprintf(stderr, "Could not read the file\n");
 		fclose(fp);
 		return 1;
 	}
 
 	fclose(fp);
-	disasm(buf, len);
+	disasm(buf, size);
+    free(buf);
 	return 0;
 }

@@ -1,3 +1,5 @@
-============ i286dis x86 disassembler ============
+i286dis -- x86 disassembler
 
-Library for disassembling 80x86 machine code.
+A library for disassembling 80x86 machine code.
+
+Currently does not support FPU instructions.
