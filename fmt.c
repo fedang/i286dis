@@ -154,13 +154,6 @@ const char *opcode_mnemonics[] = {
     "xchg",
     "xlat",
     "xor",
-    "lock",
-    "rep",
-    "repne",
-    "cs",
-    "ds",
-    "es",
-    "ss",
 };
 
 void fmt_init(struct fmt *fmt, enum fmt_flag flags)
@@ -174,7 +167,7 @@ bool fmt_is_done(struct fmt *fmt)
     return fmt->state < 0 || fmt->last == NULL;
 }
 
-static int fmt_memory(struct fmt *fmt, struct oper *oper, char *buf, size_t size)
+static int fmt_memory(struct fmt *fmt, struct oper *oper, char *buf, size_t size, enum prefix pref)
 {
     const char *seg = "";
     const char *base = "";
@@ -220,13 +213,31 @@ static int fmt_memory(struct fmt *fmt, struct oper *oper, char *buf, size_t size
             break;
     }
 
+    switch (pref & PRE_MASK2) {
+        case PRE_CS:
+            seg = "cs:";
+            break;
+
+        case PRE_DS:
+            seg = "ds:";
+            break;
+
+        case PRE_ES:
+            seg = "es:";
+            break;
+
+        case PRE_SS:
+            seg = "ss:";
+            break;
+    }
+
     bool hex = fmt->flags & FMT_HEX_DISP;
     if (*base == 0)
         return snprintf(buf, size, hex ? "%s[0x%hx]" : "%s[%hu]",
                         seg, oper->mem.disp);
 
     char sign = oper->mem.disp < 0 ? '-' : '+';
-    uint16_t disp = abs(oper->mem.disp);
+    uint16_t disp = (uint16_t)oper->mem.disp;
 
     if (disp == 0)
         return snprintf(buf, size, "%s[%s]", seg, base);
@@ -235,7 +246,7 @@ static int fmt_memory(struct fmt *fmt, struct oper *oper, char *buf, size_t size
                     seg, base, sign, disp);
 }
 
-static int fmt_oper(struct fmt *fmt, struct oper *oper, char *buf, size_t size)
+static int fmt_oper(struct fmt *fmt, struct oper *oper, char *buf, size_t size, enum prefix pref)
 {
     bool hex = fmt->flags & FMT_HEX_IMM;
     int n = 0, sum = 0;
@@ -272,7 +283,7 @@ static int fmt_oper(struct fmt *fmt, struct oper *oper, char *buf, size_t size)
             break;
 
         case I286_OPER_MEM:
-            n = fmt_memory(fmt, oper, buf, size);
+            n = fmt_memory(fmt, oper, buf, size, pref);
             break;
     }
 
@@ -311,7 +322,7 @@ static int fmt_branch(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
                 ins->opers->imm32 >> 16, ins->opers->imm32);
         }
 
-        return fmt_oper(fmt, ins->opers, buf, size);
+        return fmt_oper(fmt, ins->opers, buf, size, ins->pref);
     }
 
     uint32_t addr = ins->addr + ins->len;
@@ -372,7 +383,7 @@ static int fmt_branch(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
         }
 
         fmt->state = -1;
-        return fmt_oper(fmt, ins->opers, buf, size);
+        return fmt_oper(fmt, ins->opers, buf, size, ins->pref);
     }
 }
 
@@ -400,6 +411,16 @@ int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
             sum += n;
         }
 
+        if (ins->pref & PRE_MASK1) {
+            char *pre = (ins->pref & PRE_MASK1) == PRE_LOCK ? "lock "
+                      : (ins->pref & PRE_MASK1) == PRE_REP ? "rep "
+                      : "repne ";
+            n = snprintf(buf, size, "%s", pre);
+            buf += n;
+            size -= n;
+            sum += n;
+        }
+
         n = snprintf(buf, size, "%s", opcode_mnemonics[ins->op]);
         if (n < 0 || (unsigned)n > size)
             return -1;
@@ -421,10 +442,10 @@ int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
         return fmt_branch(fmt, ins, buf, size);
 
     struct oper *oper = ins->opers;
-    for (int i = 0; oper; oper = oper->next) {
-        if (++i == fmt->state) {
+    for (int i = 2; oper; oper = oper->next) {
+        if (i++ == fmt->state) {
             fmt->state = oper->next ? fmt->state + 1 : -1;
-            return fmt_oper(fmt, oper, buf, size);
+            return fmt_oper(fmt, oper, buf, size, ins->pref);
         }
     }
 

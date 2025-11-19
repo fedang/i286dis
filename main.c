@@ -58,14 +58,14 @@ void disasm(uint8_t *bytes, size_t len)
         int space = printf("%x:", ins->addr);
         off = 0;
 
-        while (insn_is_prefix(ins)) {
-            space += printf(" %02x", bytes[idx - 1]);
+        //while (insn_is_prefix(ins)) {
+        //    space += printf(" %02x", bytes[idx - 1]);
 
-            off += snprintf(buf + off, sizeof(buf) - off, "%s ", opcode_mnemonics[ins->op]);
+        //    off += snprintf(buf + off, sizeof(buf) - off, "%s ", opcode_mnemonics[ins->op]);
 
-            if (!dis_iterate(&dis, &idx, &ins) || !ins)
-                break;
-        }
+        //    if (!dis_iterate(&dis, &idx, &ins) || !ins)
+        //        break;
+        //}
 
         for (int i = 0; i < ins->len; i++)
             space += printf(" %02x", bytes[idx - ins->len + i]);

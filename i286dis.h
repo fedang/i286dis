@@ -193,19 +193,26 @@ enum opcode {
     I286_XCHG,
     I286_XLAT,
     I286_XOR,
-    I286_PRE_LOCK,
-    I286_PRE_REP,
-    I286_PRE_REPNE,
-    I286_PRE_CS,
-    I286_PRE_DS,
-    I286_PRE_ES,
-    I286_PRE_SS,
+};
+
+enum prefix {
+    PRE_LOCK  = 1 << 0,
+    PRE_REP   = 1 << 1,
+    PRE_REPNE = 1 << 2,
+    PRE_CS    = 1 << 3,
+    PRE_DS    = 1 << 4,
+    PRE_ES    = 1 << 5,
+    PRE_SS    = 1 << 6,
+
+    PRE_MASK1 = PRE_LOCK | PRE_REP | PRE_REPNE,
+    PRE_MASK2 = PRE_CS | PRE_DS | PRE_ES | PRE_SS,
 };
 
 struct insn {
 	uint32_t addr;
     uint8_t len;
 	enum opcode op;
+    enum prefix pref;
 	struct oper *opers;
 };
 
@@ -266,8 +273,6 @@ void oper_free(struct oper *oper);
 bool insn_is_bad(struct insn *ins);
 
 bool insn_is_terminator(struct insn *ins);
-
-bool insn_is_prefix(struct insn *ins);
 
 bool insn_is_branch(struct insn *ins);
 

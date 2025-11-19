@@ -242,6 +242,8 @@ static bool decode_imm(struct dis *dis, struct insn *ins, uintptr_t arg)
     return try_fetch8(dis, &ins->opers->imm8);
 }
 
+static bool decode_prefix(struct dis *dis, struct insn *ins, uintptr_t arg);
+
 static bool decode_modrm(struct dis *dis, struct insn *ins, uintptr_t arg)
 {
     ins->op = arg & 0xFFFF;
@@ -656,7 +658,7 @@ static struct optab encodings[256] = {
 	/* 0x23 */ { decode_modrm, I286_AND | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0x24 */ { decode_acc, I286_AND },
 	/* 0x25 */ { decode_acc, I286_AND | REG_WIDE << 16 },
-	/* 0x26 */ { decode_simple, I286_PRE_ES },
+	/* 0x26 */ { decode_prefix, PRE_ES },
 	/* 0x27 */ { decode_simple, I286_DAA },
 	/* 0x28 */ { decode_modrm, I286_SUB | DIR_TO_RM << 16 },
 	/* 0x29 */ { decode_modrm, I286_SUB | (DIR_TO_RM | REG_WIDE) << 16 },
@@ -664,7 +666,7 @@ static struct optab encodings[256] = {
 	/* 0x2B */ { decode_modrm, I286_SUB | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0x2C */ { decode_acc, I286_SUB },
 	/* 0x2D */ { decode_acc, I286_SUB | REG_WIDE << 16 },
-	/* 0x2E */ { decode_simple, I286_PRE_CS },
+	/* 0x2E */ { decode_prefix, PRE_CS },
 	/* 0x2F */ { decode_simple, I286_DAS },
 	/* 0x30 */ { decode_modrm, I286_XOR | DIR_TO_RM << 16 },
 	/* 0x31 */ { decode_modrm, I286_XOR | (DIR_TO_RM | REG_WIDE) << 16 },
@@ -672,7 +674,7 @@ static struct optab encodings[256] = {
 	/* 0x33 */ { decode_modrm, I286_XOR | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0x34 */ { decode_acc, I286_XOR },
 	/* 0x35 */ { decode_acc, I286_XOR | REG_WIDE << 16 },
-	/* 0x36 */ { decode_simple, I286_PRE_SS },
+	/* 0x36 */ { decode_prefix, PRE_SS },
 	/* 0x37 */ { decode_simple, I286_AAA },
 	/* 0x38 */ { decode_modrm, I286_CMP | DIR_TO_RM << 16 },
 	/* 0x39 */ { decode_modrm, I286_CMP | (DIR_TO_RM | REG_WIDE) << 16 },
@@ -680,7 +682,7 @@ static struct optab encodings[256] = {
 	/* 0x3B */ { decode_modrm, I286_CMP | (DIR_TO_REG | REG_WIDE) << 16 },
 	/* 0x3C */ { decode_acc, I286_CMP },
 	/* 0x3D */ { decode_acc, I286_CMP | REG_WIDE << 16 },
-	/* 0x3E */ { decode_simple, I286_PRE_DS },
+	/* 0x3E */ { decode_prefix, PRE_DS },
 	/* 0x3F */ { decode_simple, I286_AAS },
 	/* 0x40 */ { decode_regenc, 0x40 },
 	/* 0x41 */ { decode_regenc, 0x41 },
@@ -858,10 +860,10 @@ static struct optab encodings[256] = {
 	/* 0xED */ { decode_inout, 0xED },
 	/* 0xEE */ { decode_inout, 0xEE },
 	/* 0xEF */ { decode_inout, 0xEF },
-	/* 0xF0 */ { decode_simple, I286_PRE_LOCK },
+	/* 0xF0 */ { decode_prefix, PRE_LOCK },
 	/* 0xF1 */ { decode_int, 1 },
-	/* 0xF2 */ { decode_simple, I286_PRE_REPNE },
-	/* 0xF3 */ { decode_simple, I286_PRE_REP },
+	/* 0xF2 */ { decode_prefix, PRE_REPNE },
+	/* 0xF3 */ { decode_prefix, PRE_REP },
 	/* 0xF4 */ { decode_simple, I286_HLT },
 	/* 0xF5 */ { decode_simple, I286_CMC },
 	/* 0xF6 */ { decode_group3, 0xF6 },
@@ -875,6 +877,35 @@ static struct optab encodings[256] = {
 	/* 0xFE */ { decode_group4, 0xFE },
 	/* 0xFF */ { decode_group4, 0xFF },
 };
+
+static bool decode_prefix(struct dis *dis, struct insn *ins, uintptr_t arg)
+{
+    enum prefix mask = 0;
+    switch (arg) {
+        case PRE_LOCK:
+        case PRE_REP:
+        case PRE_REPNE:
+            mask = PRE_MASK1;
+            break;
+
+        case PRE_CS:
+        case PRE_DS:
+        case PRE_ES:
+        case PRE_SS:
+            mask = PRE_MASK2;
+            break;
+    }
+
+    uint8_t next;
+    if (!try_fetch8(dis, &next))
+        return false;
+
+    ins->pref &= ~mask;
+    ins->pref |= arg;
+
+    struct optab *optab = &encodings[next];
+    return optab->decode && optab->decode(dis, ins, optab->arg);
+}
 
 static bool decode_group6(struct dis *dis, struct insn *ins, uintptr_t arg)
 {

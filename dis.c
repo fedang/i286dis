@@ -65,17 +65,6 @@ bool insn_is_terminator(struct insn *ins)
         || ins->op == I286_IRET;
 }
 
-bool insn_is_prefix(struct insn *ins)
-{
-    return ins->op == I286_PRE_LOCK
-        || ins->op == I286_PRE_REP
-        || ins->op == I286_PRE_REPNE
-        || ins->op == I286_PRE_CS
-        || ins->op == I286_PRE_DS
-        || ins->op == I286_PRE_ES
-        || ins->op == I286_PRE_SS;
-}
-
 bool insn_is_branch(struct insn *ins)
 {
     switch (ins->op) {

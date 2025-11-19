@@ -3,6 +3,7 @@ bits 16
 
 mov ax, [0x1234]
 mov [0x2345], bx
+mov es:[0x2345], bx
 
 imul ax, [bx+0x30], 10
 
@@ -34,6 +35,8 @@ int3
 loop label2
 
 mov al, [0x1234]
+
+lock xchg al, bl
 
 int3
 nop
