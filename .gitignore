@@ -2,5 +2,6 @@
 *.o
 *.old
 *.swp
+*.com
 test
 i286dis

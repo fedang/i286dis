@@ -10,6 +10,18 @@ static unsigned entry = 0x100;
 
 #define SPACING 32
 
+int yellow(char *buf, size_t size, struct insn *ins)
+{
+    (void)ins;
+    return snprintf(buf, size, "\e[93m");
+}
+
+int reset(char *buf, size_t size, struct insn *ins)
+{
+    (void)ins;
+    return snprintf(buf, size, "\e[0m");
+}
+
 void disasm(uint8_t *bytes, size_t len)
 {
     struct dis dis;
@@ -22,6 +34,11 @@ void disasm(uint8_t *bytes, size_t len)
 
     struct insn *ins;
     uint32_t idx = 0;
+
+    struct fmt fmt;
+    fmt_init(&fmt, FMT_DEFAULT);
+    fmt.opcode_pre = yellow;
+    fmt.opcode_post = reset;
 
     while (dis_iterate(&dis, &idx, &ins)) {
         if (!ins) {
@@ -53,7 +70,7 @@ void disasm(uint8_t *bytes, size_t len)
         for (int i = 0; i < ins->len; i++)
             space += printf(" %02x", bytes[idx - ins->len + i]);
 
-        insn_format(buf + off, sizeof(buf) - off, ins, FMT_DEFAULT);
+        fmt_insn(&fmt, ins, buf + off, sizeof(buf) - off);
 
         for (int i = space; i < SPACING; i++)
             putchar(' ');

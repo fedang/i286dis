@@ -237,6 +237,10 @@ struct fmt {
     struct insn *last;
     int state;
     enum fmt_flag flags;
+    int (*opcode_pre)(char *, size_t, struct insn *);
+    int (*opcode_post)(char *, size_t, struct insn *);
+    int (*oper_pre)(char *, size_t, struct oper *);
+    int (*oper_post)(char *, size_t, struct oper *);
 };
 
 extern const char *reg_mnemonics[];
@@ -259,8 +263,6 @@ struct oper *oper_alloc_seg(enum seg seg);
 
 void oper_free(struct oper *oper);
 
-int oper_format(char *buf, size_t size, struct oper *oper, enum fmt_flag flags);
-
 bool insn_is_bad(struct insn *ins);
 
 bool insn_is_terminator(struct insn *ins);
@@ -274,8 +276,6 @@ bool insn_get_branch(struct insn *ins, uint32_t *target);
 struct insn *insn_alloc(uint32_t addr);
 
 void insn_free(struct insn *ins);
-
-int insn_format(char *buf, size_t size, struct insn *ins, enum fmt_flag flags);
 
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base);
 
@@ -296,5 +296,7 @@ void fmt_init(struct fmt *fmt, enum fmt_flag flags);
 bool fmt_is_done(struct fmt *fmt);
 
 int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size);
+
+int fmt_insn(struct fmt *fmt, struct insn *ins, char *buf, size_t size);
 
 #endif

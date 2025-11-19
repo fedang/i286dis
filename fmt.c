@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "i286dis.h"
 
@@ -164,8 +165,7 @@ const char *opcode_mnemonics[] = {
 
 void fmt_init(struct fmt *fmt, enum fmt_flag flags)
 {
-    fmt->last = NULL;
-    fmt->state = 0;
+    memset(fmt, 0, sizeof(struct fmt));
     fmt->flags = flags;
 }
 
@@ -238,35 +238,59 @@ static int fmt_memory(struct fmt *fmt, struct oper *oper, char *buf, size_t size
 static int fmt_oper(struct fmt *fmt, struct oper *oper, char *buf, size_t size)
 {
     bool hex = fmt->flags & FMT_HEX_IMM;
-    int n = 0;
+    int n = 0, sum = 0;
+
+    if (fmt->oper_pre) {
+        n = fmt->oper_pre(buf, size, oper);
+        if (n < 0 || (unsigned)n > size)
+            return -1;
+
+        buf += n;
+        size -= n;
+        sum += n;
+    }
 
     switch (oper->flags) {
         case I286_OPER_IMM8:
-            n += snprintf(buf, size, hex ? "0x%hhx" : "%hhu", oper->imm8);
+            n = snprintf(buf, size, hex ? "0x%hhx" : "%hhu", oper->imm8);
             break;
 
         case I286_OPER_IMM16:
-            n += snprintf(buf, size, hex ? "0x%hx" : "%hu", oper->imm16);
+            n = snprintf(buf, size, hex ? "0x%hx" : "%hu", oper->imm16);
             break;
 
         case I286_OPER_IMM32:
-            n += snprintf(buf, size, hex ? "0x%x" : "%u", oper->imm32);
+            n = snprintf(buf, size, hex ? "0x%x" : "%u", oper->imm32);
             break;
 
         case I286_OPER_REG:
-            n += snprintf(buf, size, "%s", reg_mnemonics[oper->reg]);
+            n = snprintf(buf, size, "%s", reg_mnemonics[oper->reg]);
             break;
 
         case I286_OPER_SEG:
-            n += snprintf(buf, size, "%s", seg_mnemonics[oper->seg]);
+            n = snprintf(buf, size, "%s", seg_mnemonics[oper->seg]);
             break;
 
         case I286_OPER_MEM:
-            n += fmt_memory(fmt, oper, buf, size);
+            n = fmt_memory(fmt, oper, buf, size);
             break;
     }
 
-    return n;
+    sum += n;
+    if (n < 0 || (unsigned)n > size) {
+        return -1;
+    }
+
+    if (fmt->oper_post) {
+        buf += n;
+        size -= n;
+        n = fmt->oper_post(buf, size, oper);
+        if (n < 0 || (unsigned)n > size)
+            return -1;
+        sum += n;
+    }
+
+    return sum;
 }
 
 static int fmt_branch(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
@@ -362,9 +386,35 @@ int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
     if (fmt_is_done(fmt))
         return 0;
 
+    int n = 0, sum = 0;
     if (fmt->state == 0) {
         fmt->state = ins->opers ? fmt->state + 1 : -1;
-        return snprintf(buf, size, "%s", opcode_mnemonics[ins->op]);
+
+        if (fmt->opcode_pre) {
+            n = fmt->opcode_pre(buf, size, ins);
+            if (n < 0 || (unsigned)n > size)
+                return -1;
+
+            buf += n;
+            size -= n;
+            sum += n;
+        }
+
+        n = snprintf(buf, size, "%s", opcode_mnemonics[ins->op]);
+        if (n < 0 || (unsigned)n > size)
+            return -1;
+
+        sum += n;
+        if (fmt->opcode_post) {
+            buf += n;
+            size -= n;
+            n = fmt->opcode_post(buf, size, ins);
+            if (n < 0 || (unsigned)n > size)
+                return -1;
+            sum += n;
+        }
+
+        return sum;
     }
 
     if (insn_is_branch(ins) && ins->op != I286_RET && ins->op != I286_RETF)
@@ -382,28 +432,18 @@ int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
     return 0;
 }
 
-int oper_format(char *buf, size_t size, struct oper *oper, enum fmt_flag flags)
+int fmt_insn(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
 {
-    struct fmt fmt;
-    fmt_init(&fmt, flags);
-    return fmt_oper(&fmt, oper, buf, size);
-}
-
-int insn_format(char *buf, size_t size, struct insn *ins, enum fmt_flag flags)
-{
-    struct fmt fmt;
-    fmt_init(&fmt, flags);
-
     char *start = buf;
     for (int i = 0; ; i++) {
-        int n = fmt_iterate(&fmt, ins, buf, size);
+        int n = fmt_iterate(fmt, ins, buf, size);
         if (n <= 0 || (unsigned)n > size)
             return buf - start;
 
         buf += n;
         size -= n;
 
-        if (!fmt_is_done(&fmt)) {
+        if (!fmt_is_done(fmt)) {
             if (i >= 0) {
                 bool sep = i == 0 || insn_is_branch(ins);
                 int n = snprintf(buf, size, sep ? " " : ", ");
