@@ -8,6 +8,8 @@
 static unsigned base = 0x100;
 static unsigned entry = 0x100;
 
+#define SPACING 32
+
 void disasm(uint8_t *bytes, size_t len)
 {
     struct dis dis;
@@ -24,19 +26,23 @@ void disasm(uint8_t *bytes, size_t len)
     while (dis_iterate(&dis, &idx, &ins)) {
         if (!ins) {
             uint8_t byte = bytes[idx - 1];
-            printf("%x: %02hhx\t\t\tdb ", idx + dis.base - 1, byte);
+            int space = printf("%x: %02hhx", idx + dis.base - 1, byte);
+
+            for (int i = space; i < SPACING; i++)
+                putchar(' ');
+
             if (isprint(byte))
-                printf("'%c'\n", byte);
+                printf("db '%c'\n", byte);
             else
-                printf("'\\x%hhx'\n", byte);
+                printf("db '\\x%hhx'\n", byte);
             continue;
         }
 
-        printf("%x:", ins->addr);
+        int space = printf("%x:", ins->addr);
         off = 0;
 
         while (insn_is_prefix(ins)) {
-            printf(" %02x", bytes[idx - 1]);
+            space += printf(" %02x", bytes[idx - 1]);
 
             off += snprintf(buf + off, sizeof(buf) - off, "%s ", opcode_mnemonics[ins->op]);
 
@@ -45,10 +51,14 @@ void disasm(uint8_t *bytes, size_t len)
         }
 
         for (int i = 0; i < ins->len; i++)
-            printf(" %02x", bytes[idx - ins->len + i]);
+            space += printf(" %02x", bytes[idx - ins->len + i]);
 
         insn_format(buf + off, sizeof(buf) - off, ins, FMT_DEFAULT);
-        printf("\t\t\t%s\n", buf);
+
+        for (int i = space; i < SPACING; i++)
+            putchar(' ');
+
+        printf("%s\n", buf);
     }
 
     dis_deinit(&dis);
