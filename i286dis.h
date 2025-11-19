@@ -221,9 +221,22 @@ struct dis {
     struct insn **decoded;
 };
 
+enum fmt_flag {
+    FMT_HEX_IMM  = 1 << 0,
+    FMT_HEX_DISP = 1 << 1,
+    FMT_JMP_TYPE = 1 << 2,
+    FMT_JMP_ADDR = 1 << 3,
+    FMT_JMP_BOTH = 1 << 4,
+
+    FMT_NONE     = 0,
+    FMT_DEFAULT  = FMT_HEX_IMM | FMT_HEX_DISP
+                 | FMT_JMP_TYPE | FMT_JMP_BOTH,
+};
+
 struct fmt {
     struct insn *last;
     int state;
+    enum fmt_flag flags;
 };
 
 extern const char *reg_mnemonics[];
@@ -246,6 +259,8 @@ struct oper *oper_alloc_seg(enum seg seg);
 
 void oper_free(struct oper *oper);
 
+int oper_format(char *buf, size_t size, struct oper *oper, enum fmt_flag flags);
+
 bool insn_is_bad(struct insn *ins);
 
 bool insn_is_terminator(struct insn *ins);
@@ -256,13 +271,11 @@ bool insn_is_branch(struct insn *ins);
 
 bool insn_get_branch(struct insn *ins, uint32_t *target);
 
-int oper_snprintf(char *buf, size_t size, struct oper *oper);
-
-int insn_snprintf(char *buf, size_t size, struct insn *ins);
-
 struct insn *insn_alloc(uint32_t addr);
 
 void insn_free(struct insn *ins);
+
+int insn_format(char *buf, size_t size, struct insn *ins, enum fmt_flag flags);
 
 void dis_init(struct dis *dis, const uint8_t *bytes, uint32_t len, uint32_t base);
 
@@ -278,10 +291,10 @@ void dis_disasm(struct dis *dis);
 
 bool dis_iterate(struct dis *dis, uint32_t *index, struct insn **ins);
 
-void fmt_init(struct fmt *fmt);
-
-int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size);
+void fmt_init(struct fmt *fmt, enum fmt_flag flags);
 
 bool fmt_is_done(struct fmt *fmt);
+
+int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size);
 
 #endif

@@ -47,7 +47,7 @@ void disasm(uint8_t *bytes, size_t len)
         for (int i = 0; i < ins->len; i++)
             printf(" %02x", bytes[idx - ins->len + i]);
 
-        insn_snprintf(buf + off, sizeof(buf) - off, ins);
+        insn_format(buf + off, sizeof(buf) - off, ins, FMT_DEFAULT);
         printf("\t\t\t%s\n", buf);
     }
 

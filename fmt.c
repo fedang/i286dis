@@ -162,7 +162,19 @@ const char *opcode_mnemonics[] = {
     "ss",
 };
 
-static int mem_snprintf(char *buf, size_t size, struct oper *oper)
+void fmt_init(struct fmt *fmt, enum fmt_flag flags)
+{
+    fmt->last = NULL;
+    fmt->state = 0;
+    fmt->flags = flags;
+}
+
+bool fmt_is_done(struct fmt *fmt)
+{
+    return fmt->state < 0 || fmt->last == NULL;
+}
+
+static int fmt_memory(struct fmt *fmt, struct oper *oper, char *buf, size_t size)
 {
     const char *seg = "";
     const char *base = "";
@@ -208,8 +220,10 @@ static int mem_snprintf(char *buf, size_t size, struct oper *oper)
             break;
     }
 
+    bool hex = fmt->flags & FMT_HEX_DISP;
     if (*base == 0)
-        return snprintf(buf, size, "%s[0x%hx]", seg, oper->mem.disp);
+        return snprintf(buf, size, hex ? "%s[0x%hx]" : "%s[%hu]",
+                        seg, oper->mem.disp);
 
     char sign = oper->mem.disp < 0 ? '-' : '+';
     uint16_t disp = abs(oper->mem.disp);
@@ -217,23 +231,26 @@ static int mem_snprintf(char *buf, size_t size, struct oper *oper)
     if (disp == 0)
         return snprintf(buf, size, "%s[%s]", seg, base);
 
-    return snprintf(buf, size, "%s[%s %c 0x%hx]", seg, base, sign, disp);
+    return snprintf(buf, size, hex ? "%s[%s %c 0x%hx]" : "%s[%s %c %hu]",
+                    seg, base, sign, disp);
 }
 
-int oper_snprintf(char *buf, size_t size, struct oper *oper)
+static int fmt_oper(struct fmt *fmt, struct oper *oper, char *buf, size_t size)
 {
+    bool hex = fmt->flags & FMT_HEX_IMM;
     int n = 0;
+
     switch (oper->flags) {
         case I286_OPER_IMM8:
-            n += snprintf(buf, size, "0x%hhx", oper->imm8);
+            n += snprintf(buf, size, hex ? "0x%hhx" : "%hhu", oper->imm8);
             break;
 
         case I286_OPER_IMM16:
-            n += snprintf(buf, size, "0x%hx", oper->imm16);
+            n += snprintf(buf, size, hex ? "0x%hx" : "%hu", oper->imm16);
             break;
 
         case I286_OPER_IMM32:
-            n += snprintf(buf, size, "0x%x", oper->imm32);
+            n += snprintf(buf, size, hex ? "0x%x" : "%u", oper->imm32);
             break;
 
         case I286_OPER_REG:
@@ -245,53 +262,21 @@ int oper_snprintf(char *buf, size_t size, struct oper *oper)
             break;
 
         case I286_OPER_MEM:
-            n += mem_snprintf(buf, size, oper);
+            n += fmt_memory(fmt, oper, buf, size);
             break;
     }
 
     return n;
 }
 
-int insn_snprintf(char *buf, size_t size, struct insn *ins)
-{
-    struct fmt fmt;
-    fmt_init(&fmt);
-
-    char *start = buf;
-    for (int i = 0; ; i++) {
-        int n = fmt_iterate(&fmt, ins, buf, size);
-        if (n <= 0 || (unsigned)n > size)
-            return buf - start;
-
-        buf += n;
-        size -= n;
-
-        if (!fmt_is_done(&fmt)) {
-            if (i >= 0) {
-                bool sep = i == 0 || insn_is_branch(ins);
-                int n = snprintf(buf, size, sep ? " " : ", ");
-                if (n <= 0 || (unsigned)n > size)
-                    return buf - start;
-
-                buf += n;
-                size -= n;
-            }
-        }
-    }
-
-    return -1;
-}
-
-void fmt_init(struct fmt *fmt)
-{
-    fmt->last = NULL;
-    fmt->state = 0;
-}
-
 static int fmt_branch(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
 {
+    bool jtype = fmt->flags & FMT_JMP_TYPE;
+    bool jaddr = fmt->flags & FMT_JMP_ADDR;
+    bool jboth = fmt->flags & FMT_JMP_BOTH;
+
     if (ins->op == I286_JMPF || ins->op == I286_CALLF) {
-        if (fmt->state == 1) {
+        if (fmt->state == 1 && jtype) {
             fmt->state++;
             return snprintf(buf, size, "far");
         }
@@ -302,36 +287,68 @@ static int fmt_branch(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
                 ins->opers->imm32 >> 16, ins->opers->imm32);
         }
 
-        return oper_snprintf(buf, size, ins->opers);
+        return fmt_oper(fmt, ins->opers, buf, size);
     }
 
     uint32_t addr = ins->addr + ins->len;
     if (ins->opers->flags == I286_OPER_IMM8) {
-        if (fmt->state == 1) {
+        if (fmt->state == 1 && jtype) {
             fmt->state++;
             return snprintf(buf, size, "short");
         }
 
-        fmt->state = -1;
         addr += (int32_t)(int8_t)ins->opers->imm8;
-        return snprintf(buf, size, "%hhd ; 0x%x", ins->opers->imm8, addr);
+        if (jboth) {
+            if (fmt->state < 2)
+                fmt->state = 2;
+
+            if (fmt->state == 3) {
+                fmt->state = -1;
+                return snprintf(buf, size, "; 0x%x", addr);
+            }
+
+            fmt->state++;
+            return snprintf(buf, size, "%hhd", ins->opers->imm8);
+        }
+
+        fmt->state = -1;
+        if (jaddr)
+            return snprintf(buf, size, "0x%x", addr);
+
+        return snprintf(buf, size, "%hhd", ins->opers->imm8);
     } else if (ins->opers->flags == I286_OPER_IMM16) {
-        if (fmt->state == 1) {
+        if (fmt->state == 1 && jtype) {
             fmt->state++;
             return snprintf(buf, size, "near");
         }
 
-        fmt->state = -1;
         addr += (int32_t)(int16_t)ins->opers->imm16;
-        return snprintf(buf, size, "%hd ; 0x%x", ins->opers->imm16, addr);
+        if (jboth) {
+            if (fmt->state < 2)
+                fmt->state = 2;
+
+            if (fmt->state == 3) {
+                fmt->state = -1;
+                return snprintf(buf, size, "; 0x%x", addr);
+            }
+
+            fmt->state++;
+            return snprintf(buf, size, "%hd", ins->opers->imm16);
+        }
+
+        fmt->state = -1;
+        if (jaddr)
+            return snprintf(buf, size, "0x%x", addr);
+
+        return snprintf(buf, size, "%hd", ins->opers->imm16);
     } else {
-        if (fmt->state == 1) {
+        if (fmt->state == 1 && jtype) {
             fmt->state++;
             return snprintf(buf, size, "word");
         }
 
         fmt->state = -1;
-        return oper_snprintf(buf, size, ins->opers);
+        return fmt_oper(fmt, ins->opers, buf, size);
     }
 }
 
@@ -357,7 +374,7 @@ int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
     for (int i = 0; oper; oper = oper->next) {
         if (++i == fmt->state) {
             fmt->state = oper->next ? fmt->state + 1 : -1;
-            return oper_snprintf(buf, size, oper);
+            return fmt_oper(fmt, oper, buf, size);
         }
     }
 
@@ -365,7 +382,39 @@ int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size)
     return 0;
 }
 
-bool fmt_is_done(struct fmt *fmt)
+int oper_format(char *buf, size_t size, struct oper *oper, enum fmt_flag flags)
 {
-    return fmt->state < 0 || fmt->last == NULL;
+    struct fmt fmt;
+    fmt_init(&fmt, flags);
+    return fmt_oper(&fmt, oper, buf, size);
+}
+
+int insn_format(char *buf, size_t size, struct insn *ins, enum fmt_flag flags)
+{
+    struct fmt fmt;
+    fmt_init(&fmt, flags);
+
+    char *start = buf;
+    for (int i = 0; ; i++) {
+        int n = fmt_iterate(&fmt, ins, buf, size);
+        if (n <= 0 || (unsigned)n > size)
+            return buf - start;
+
+        buf += n;
+        size -= n;
+
+        if (!fmt_is_done(&fmt)) {
+            if (i >= 0) {
+                bool sep = i == 0 || insn_is_branch(ins);
+                int n = snprintf(buf, size, sep ? " " : ", ");
+                if (n <= 0 || (unsigned)n > size)
+                    return buf - start;
+
+                buf += n;
+                size -= n;
+            }
+        }
+    }
+
+    return -1;
 }
