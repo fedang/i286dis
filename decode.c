@@ -447,19 +447,10 @@ static bool decode_moff(struct dis *dis, struct insn *ins, uintptr_t arg)
     struct oper *o_reg, *o_off;
     int16_t disp = 0;
 
-    if (flags & REG_WIDE) {
-        o_reg = oper_alloc_reg(I286_REG_AX);
-        if (!try_fetch16(dis, (uint16_t *)&disp))
-            return false;
-    } else {
-        uint8_t low;
-        o_reg = oper_alloc_reg(I286_REG_AL);
+    o_reg = oper_alloc_reg(flags & REG_WIDE ? I286_REG_AX : I286_REG_AL);
 
-        if (!try_fetch8(dis, &low))
-            return false;
-
-        disp = (int16_t)(int8_t)low;
-    }
+    if (!try_fetch16(dis, (uint16_t *)&disp))
+        return false;
 
     o_off = oper_alloc(I286_OPER_MEM);
     o_off->mem.mode = I286_MEM_MOFF;

@@ -33,8 +33,9 @@ int3
 
 loop label2
 
-mov al, [0x12]
+mov al, [0x1234]
 
+int3
 nop
 nop
 nop

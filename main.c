@@ -5,8 +5,8 @@
 
 #include "i286dis.h"
 
-static unsigned base = 0x7c00;
-static unsigned entry = 0x7c00;
+static unsigned base = 0x100;
+static unsigned entry = 0x100;
 
 void disasm(uint8_t *bytes, size_t len)
 {

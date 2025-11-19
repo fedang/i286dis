@@ -209,7 +209,7 @@ struct insn {
 	struct oper *opers;
 };
 
-#define DIS_ENTRY_N 32
+#define DIS_ENTRY_N 64
 
 struct dis {
     uint32_t ip;
@@ -219,6 +219,11 @@ struct dis {
     uint32_t entry_list[DIS_ENTRY_N];
     uint32_t entry_n;
     struct insn **decoded;
+};
+
+struct fmt {
+    struct insn *last;
+    int state;
 };
 
 extern const char *reg_mnemonics[];
@@ -251,6 +256,8 @@ bool insn_is_branch(struct insn *ins);
 
 bool insn_get_branch(struct insn *ins, uint32_t *target);
 
+int oper_snprintf(char *buf, size_t size, struct oper *oper);
+
 int insn_snprintf(char *buf, size_t size, struct insn *ins);
 
 struct insn *insn_alloc(uint32_t addr);
@@ -270,5 +277,11 @@ struct insn *dis_decode(struct dis *dis);
 void dis_disasm(struct dis *dis);
 
 bool dis_iterate(struct dis *dis, uint32_t *index, struct insn **ins);
+
+void fmt_init(struct fmt *fmt);
+
+int fmt_iterate(struct fmt *fmt, struct insn *ins, char *buf, size_t size);
+
+bool fmt_is_done(struct fmt *fmt);
 
 #endif
